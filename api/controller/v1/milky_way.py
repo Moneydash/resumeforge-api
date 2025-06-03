@@ -51,7 +51,115 @@ def export_pdf():
         return jsonify({'error': f'Failed to generate PDF: {str(e)}'}), 500
 
 def generate_resume_html(resume_data):
-    """Generate HTML for creative/professional resume"""
+    """Generate HTML for creative resume (modern, colorful, two-column)"""
+    # About Me
+    about_html = ''
+    if resume_data.get('summary'):
+        about_html = f'<section class="mw-section"><h2 class="mw-section-title">About Me</h2><div class="mw-summary">{format_description(resume_data.get("summary", ""))}</div></section>'
+
+    # Experience
+    experience_html = ''
+    if resume_data.get('experience'):
+        experience_html += '<section class="mw-section"><h2 class="mw-section-title">Experience</h2>'
+        for job in resume_data.get('experience', []):
+            experience_html += f'''
+                <div class="mw-item mw-card">
+                    <div class="mw-item-header">
+                        <span class="mw-item-title">{job.get('title', '')}</span> <span class="mw-item-company">@ {job.get('company', '')}</span>
+                        <span class="mw-item-date">{format_date(job.get('startDate', ''))} - {format_date(job.get('endDate', '')) if job.get('endDate') else 'Present'}</span>
+                    </div>
+                    <div class="mw-item-description">{format_description(job.get('description', ''))}</div>
+                </div>'''
+        experience_html += '</section>'
+
+    # Education
+    education_html = ''
+    if resume_data.get('education'):
+        education_html += '<section class="mw-section"><h2 class="mw-section-title">Education</h2>'
+        for edu in resume_data.get('education', []):
+            education_html += f'''
+                <div class="mw-item mw-card">
+                    <div class="mw-item-header">
+                        <span class="mw-item-title">{edu.get('degree', '')}</span> <span class="mw-item-company">@ {edu.get('institution', '')}</span>
+                        <span class="mw-item-date">{format_date(edu.get('startDate', ''))} - {format_date(edu.get('endDate', '')) if edu.get('endDate') else 'Present'}</span>
+                    </div>
+                    <div class="mw-item-description">{format_description(edu.get('description', ''))}</div>
+                </div>'''
+        education_html += '</section>'
+
+    # Projects
+    projects_html = ''
+    if resume_data.get('projects'):
+        projects_html += '<section class="mw-section"><h2 class="mw-section-title">Projects</h2>'
+        for project in resume_data.get('projects', []):
+            projects_html += f'''
+                <div class="mw-item mw-card">
+                    <div class="mw-item-header">
+                        <span class="mw-item-title">{project.get('title', '')}</span>
+                        <span class="mw-item-tech">{', '.join(project.get('technologies', []))}</span>
+                    </div>
+                    <div class="mw-item-description">{format_description(project.get('description', ''))}</div>
+                </div>'''
+        projects_html += '</section>'
+
+    # Skills
+    skills_html = ''
+    if resume_data.get('skills', {}).get('keywords'):
+        skills_html = f'<section class="mw-section"><h2 class="mw-section-title">Skills</h2><div class="mw-skills">' + ' '.join([f'<span class="mw-skill-pill">{skill}</span>' for skill in resume_data.get('skills', {}).get('keywords', [])]) + '</div></section>'
+
+    # Languages
+    languages_html = ''
+    if resume_data.get('languages'):
+        languages_html = f'<section class="mw-section"><h2 class="mw-section-title">Languages</h2><div class="mw-languages">' + ', '.join(resume_data.get('languages', [])) + '</div></section>'
+
+    # Certifications
+    certifications_html = ''
+    if resume_data.get('certifications'):
+        certifications_html += '<section class="mw-section"><h2 class="mw-section-title">Certifications</h2>'
+        for cert in resume_data.get('certifications', []):
+            certifications_html += f'''
+                <div class="mw-item mw-card">
+                    <div class="mw-item-header">
+                        <span class="mw-item-title">{cert.get('name', '')}</span> <span class="mw-item-company">@ {cert.get('issuingOrganization', '')}</span>
+                        <span class="mw-item-date">{format_date(cert.get('date', ''))}</span>
+                    </div>
+                </div>'''
+        certifications_html += '</section>'
+
+    # Awards
+    awards_html = ''
+    if resume_data.get('awards'):
+        awards_html += '<section class="mw-section"><h2 class="mw-section-title">Awards</h2>'
+        for award in resume_data.get('awards', []):
+            awards_html += f'''
+                <div class="mw-item mw-card">
+                    <div class="mw-item-header">
+                        <span class="mw-item-title">{award.get('title', '')}</span> <span class="mw-item-company">@ {award.get('awarder', '')}</span>
+                        <span class="mw-item-date">{format_date(award.get('date', ''))}</span>
+                    </div>
+                    <div class="mw-item-description">{format_description(award.get('summary', ''))}</div>
+                </div>'''
+        awards_html += '</section>'
+
+    # Interests
+    interests_html = ''
+    if resume_data.get('interests'):
+        interests_html = f'<section class="mw-section"><h2 class="mw-section-title">Interests</h2><div class="mw-interests">' + ', '.join(resume_data.get('interests', [])) + '</div></section>'
+
+    # References
+    references_html = ''
+    if resume_data.get('references'):
+        references_html += '<section class="mw-section"><h2 class="mw-section-title">References</h2>'
+        for ref in resume_data.get('references', []):
+            references_html += f'''
+                <div class="mw-item mw-card">
+                    <div class="mw-item-header">
+                        <span class="mw-item-title">{ref.get('name', '')}</span> <span class="mw-item-company">@ {ref.get('relationship', '')}</span>
+                    </div>
+                    <div class="mw-item-description">{format_description(ref.get('contact', ''))}</div>
+                </div>'''
+        references_html += '</section>'
+
     html = f'''
     <!DOCTYPE html>
     <html lang="en">
@@ -63,7 +171,6 @@ def generate_resume_html(resume_data):
     <body>
         <div class="mw-container">
             <header class="mw-header">
-                <div class="mw-header-bg"></div>
                 <h1 class="mw-name">{resume_data.get('personal', {}).get('name', '')}</h1>
                 <h2 class="mw-headline">{resume_data.get('personal', {}).get('headline', '')}</h2>
                 <div class="mw-contact">
@@ -73,68 +180,16 @@ def generate_resume_html(resume_data):
                 </div>
             </header>
             <main class="mw-main">
-                {f'<section class="mw-section"><h2 class="mw-section-title">About Me</h2><div class="mw-summary">{format_description(resume_data.get("summary", ""))}</div></section>' if resume_data.get('summary') else ''}
-                {f'<section class="mw-section"><h2 class="mw-section-title">Work Experience</h2>' if resume_data.get('experience') else ''}
-                {''.join([
-                    f'''<div class="mw-item mw-card">
-                        <div class="mw-item-header">
-                            <span class="mw-item-title">{job.get('title', '')}</span> <span class="mw-item-company">@ {job.get('company', '')}</span>
-                            <span class="mw-item-date">{format_date(job.get('startDate', ''))} - {format_date(job.get('endDate', '')) if job.get('endDate') else 'Present'}</span>
-                        </div>
-                        <div class="mw-item-description">{format_description(job.get('description', ''))}</div>
-                    </div>''' for job in resume_data.get('experience', [])])}
-                {f'</section>' if resume_data.get('experience') else ''}
-                {f'<section class="mw-section"><h2 class="mw-section-title">Education</h2>' if resume_data.get('education') else ''}
-                {''.join([
-                    f'''<div class="mw-item mw-card">
-                        <div class="mw-item-header">
-                            <span class="mw-item-title">{edu.get('degree', '')}</span> <span class="mw-item-company">@ {edu.get('institution', '')}</span>
-                            <span class="mw-item-date">{format_date(edu.get('startDate', ''))} - {format_date(edu.get('endDate', '')) if edu.get('endDate') else 'Present'}</span>
-                        </div>
-                        <div class="mw-item-description">{format_description(edu.get('description', ''))}</div>
-                    </div>''' for edu in resume_data.get('education', [])])}
-                {f'</section>' if resume_data.get('education') else ''}
-                {f'<section class="mw-section"><h2 class="mw-section-title">Projects</h2>' if resume_data.get('projects') else ''}
-                {''.join([
-                    f'''<div class="mw-item mw-card">
-                        <div class="mw-item-header">
-                            <span class="mw-item-title">{project.get('title', '')}</span>
-                            <span class="mw-item-tech">{', '.join(project.get('technologies', []))}</span>
-                        </div>
-                        <div class="mw-item-description">{format_description(project.get('description', ''))}</div>
-                    </div>''' for project in resume_data.get('projects', [])])}
-                {f'</section>' if resume_data.get('projects') else ''}
-                {f'<section class="mw-section"><h2 class="mw-section-title">Skills</h2><div class="mw-skills">' + ' '.join([f'<span class="mw-skill-pill">{skill}</span>' for skill in resume_data.get('skills', {}).get('keywords', [])]) + '</div></section>' if resume_data.get('skills', {}).get('keywords') else ''}
-                {f'<section class="mw-section"><h2 class="mw-section-title">Languages</h2><div class="mw-languages">' + ', '.join(resume_data.get('languages', [])) + '</div></section>' if resume_data.get('languages') else ''}
-                {f'<section class="mw-section"><h2 class="mw-section-title">Certifications</h2>' if resume_data.get('certifications') else ''}
-                {''.join([
-                    f'''<div class="mw-item mw-card">
-                        <div class="mw-item-header">
-                            <span class="mw-item-title">{cert.get('name', '')}</span> <span class="mw-item-company">@ {cert.get('issuingOrganization', '')}</span>
-                            <span class="mw-item-date">{format_date(cert.get('date', ''))}</span>
-                        </div>
-                    </div>''' for cert in resume_data.get('certifications', [])])}
-                {f'</section>' if resume_data.get('certifications') else ''}
-                {f'<section class="mw-section"><h2 class="mw-section-title">Awards</h2>' if resume_data.get('awards') else ''}
-                {''.join([
-                    f'''<div class="mw-item mw-card">
-                        <div class="mw-item-header">
-                            <span class="mw-item-title">{award.get('title', '')}</span> <span class="mw-item-company">@ {award.get('awarder', '')}</span>
-                            <span class="mw-item-date">{format_date(award.get('date', ''))}</span>
-                        </div>
-                        <div class="mw-item-description">{format_description(award.get('summary', ''))}</div>
-                    </div>''' for award in resume_data.get('awards', [])])}
-                {f'</section>' if resume_data.get('awards') else ''}
-                {f'<section class="mw-section"><h2 class="mw-section-title">Interests</h2><div class="mw-interests">' + ', '.join(resume_data.get('interests', [])) + '</div></section>' if resume_data.get('interests') else ''}
-                {f'<section class="mw-section"><h2 class="mw-section-title">References</h2>' if resume_data.get('references') else ''}
-                {''.join([
-                    f'''<div class="mw-item mw-card">
-                        <div class="mw-item-header">
-                            <span class="mw-item-title">{ref.get('name', '')}</span> <span class="mw-item-company">@ {ref.get('relationship', '')}</span>
-                        </div>
-                        <div class="mw-item-description">{format_description(ref.get('contact', ''))}</div>
-                    </div>''' for ref in resume_data.get('references', [])])}
-                {f'</section>' if resume_data.get('references') else ''}
+                {about_html}
+                {experience_html}
+                {education_html}
+                {projects_html}
+                {skills_html}
+                {languages_html}
+                {certifications_html}
+                {awards_html}
+                {interests_html}
+                {references_html}
             </main>
         </div>
     </body>

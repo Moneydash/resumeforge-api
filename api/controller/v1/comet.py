@@ -50,6 +50,36 @@ def export_pdf():
 
 def generate_resume_html(resume_data):
     """Generate HTML for minimal resume (summary, skills, projects, interests)"""
+    # About Me
+    about_html = ''
+    if resume_data.get('summary'):
+        about_html = f'<section class="comet-section"><h2 class="comet-section-title">About Me</h2><div class="comet-summary">{format_description(resume_data.get("summary", ""))}</div></section>'
+
+    # Skills
+    skills_html = ''
+    if resume_data.get('skills', {}).get('keywords'):
+        skills_html = f'<section class="comet-section"><h2 class="comet-section-title">Skills</h2><div class="comet-skills">' + ', '.join(resume_data.get('skills', {}).get('keywords', [])) + '</div></section>'
+
+    # Projects
+    projects_html = ''
+    if resume_data.get('projects'):
+        projects_html += '<section class="comet-section"><h2 class="comet-section-title">Projects</h2>'
+        for project in resume_data.get('projects', []):
+            projects_html += f'''
+                <div class="comet-item">
+                    <div class="comet-item-header">
+                        <span class="comet-item-title">{project.get('title', '')}</span>
+                        <span class="comet-item-tech">{', '.join(project.get('technologies', []))}</span>
+                    </div>
+                    <div class="comet-item-description">{format_description(project.get('description', ''))}</div>
+                </div>'''
+        projects_html += '</section>'
+
+    # Interests
+    interests_html = ''
+    if resume_data.get('interests'):
+        interests_html = f'<section class="comet-section"><h2 class="comet-section-title">Interests</h2><div class="comet-interests">' + ', '.join(resume_data.get('interests', [])) + '</div></section>'
+
     html = f'''
     <!DOCTYPE html>
     <html lang="en">
@@ -70,19 +100,10 @@ def generate_resume_html(resume_data):
                 </div>
             </header>
             <main class="comet-main">
-                {f'<section class="comet-section"><h2 class="comet-section-title">About Me</h2><div class="comet-summary">{format_description(resume_data.get("summary", ""))}</div></section>' if resume_data.get('summary') else ''}
-                {f'<section class="comet-section"><h2 class="comet-section-title">Skills</h2><div class="comet-skills">' + ', '.join(resume_data.get('skills', {}).get('keywords', [])) + '</div></section>' if resume_data.get('skills', {}).get('keywords') else ''}
-                {f'<section class="comet-section"><h2 class="comet-section-title">Projects</h2>' if resume_data.get('projects') else ''}
-                {''.join([
-                    f'''<div class="comet-item">
-                        <div class="comet-item-header">
-                            <span class="comet-item-title">{project.get('title', '')}</span>
-                            <span class="comet-item-tech">{', '.join(project.get('technologies', []))}</span>
-                        </div>
-                        <div class="comet-item-description">{format_description(project.get('description', ''))}</div>
-                    </div>''' for project in resume_data.get('projects', [])])}
-                {f'</section>' if resume_data.get('projects') else ''}
-                {f'<section class="comet-section"><h2 class="comet-section-title">Interests</h2><div class="comet-interests">' + ', '.join(resume_data.get('interests', [])) + '</div></section>' if resume_data.get('interests') else ''}
+                {about_html}
+                {skills_html}
+                {projects_html}
+                {interests_html}
             </main>
         </div>
     </body>
