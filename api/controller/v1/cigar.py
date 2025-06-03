@@ -52,6 +52,109 @@ def export_pdf():
 
 def generate_resume_html(resume_data):
     """Generate HTML content for the classic-modern resume template"""
+    # About Me
+    about_html = ''
+    if resume_data.get('summary'):
+        about_html = f'<section class="classic-section"><h2 class="classic-section-title">About Me</h2><div class="classic-summary">{format_description(resume_data.get("summary", ""))}</div></section>'
+
+    # Work Experience
+    experience_html = ''
+    if resume_data.get('experience'):
+        experience_html += '<section class="classic-section"><h2 class="classic-section-title">Work Experience</h2>'
+        for job in resume_data.get('experience', []):
+            experience_html += f'''
+                <div class="classic-item">
+                    <div class="classic-item-header">
+                        <span class="classic-item-title">{job.get('title', '')}</span> | <span class="classic-item-subtitle">{job.get('company', '')}</span>
+                        <span class="classic-item-date">{format_date(job.get('startDate', ''))} - {format_date(job.get('endDate', '')) if job.get('endDate') else 'Present'}</span>
+                    </div>
+                    <div class="classic-item-description">{format_description(job.get('description', ''))}</div>
+                </div>'''
+        experience_html += '</section>'
+
+    # Education
+    education_html = ''
+    if resume_data.get('education'):
+        education_html += '<section class="classic-section"><h2 class="classic-section-title">Education</h2>'
+        for edu in resume_data.get('education', []):
+            education_html += f'''
+                <div class="classic-item">
+                    <div class="classic-item-header">
+                        <span class="classic-item-title">{edu.get('degree', '')}</span> | <span class="classic-item-subtitle">{edu.get('institution', '')}</span>
+                        <span class="classic-item-date">{format_date(edu.get('startDate', ''))} - {format_date(edu.get('endDate', '')) if edu.get('endDate') else 'Present'}</span>
+                    </div>
+                    <div class="classic-item-description">{format_description(edu.get('description', ''))}</div>
+                </div>'''
+        education_html += '</section>'
+
+    # Projects
+    projects_html = ''
+    if resume_data.get('projects'):
+        projects_html += '<section class="classic-section"><h2 class="classic-section-title">Projects</h2>'
+        for project in resume_data.get('projects', []):
+            projects_html += f'''
+                <div class="classic-item">
+                    <div class="classic-item-header">
+                        <span class="classic-item-title">{project.get('title', '')}</span>
+                        <span class="classic-item-date">{', '.join(project.get('technologies', []))}</span>
+                    </div>
+                    <div class="classic-item-description">{format_description(project.get('description', ''))}</div>
+                </div>'''
+        projects_html += '</section>'
+
+    # Skills
+    skills_html = ''
+    if resume_data.get('skills', {}).get('keywords'):
+        skills_html = f'<section class="classic-section"><h2 class="classic-section-title">Skills</h2><div class="classic-skills">' + ', '.join(resume_data.get('skills', {}).get('keywords', [])) + '</div></section>'
+
+    # Languages
+    languages_html = ''
+    if resume_data.get('languages'):
+        languages_html = f'<section class="classic-section"><h2 class="classic-section-title">Languages</h2><div class="classic-languages">' + ', '.join(resume_data.get('languages', [])) + '</div></section>'
+
+    # Certifications
+    certifications_html = ''
+    if resume_data.get('certifications'):
+        certifications_html += '<section class="classic-section"><h2 class="classic-section-title">Certifications</h2>'
+        for cert in resume_data.get('certifications', []):
+            certifications_html += f'''
+                <div class="classic-item">
+                    <div class="classic-item-header">
+                        <span class="classic-item-title">{cert.get('name', '')}</span> | <span class="classic-item-subtitle">{cert.get('issuingOrganization', '')}</span>
+                        <span class="classic-item-date">{format_date(cert.get('date', ''))}</span>
+                    </div>
+                </div>'''
+        certifications_html += '</section>'
+
+    # Awards
+    awards_html = ''
+    if resume_data.get('awards'):
+        awards_html += '<section class="classic-section"><h2 class="classic-section-title">Awards</h2>'
+        for award in resume_data.get('awards', []):
+            awards_html += f'''
+                <div class="classic-item">
+                    <div class="classic-item-header">
+                        <span class="classic-item-title">{award.get('title', '')}</span> | <span class="classic-item-subtitle">{award.get('awarder', '')}</span>
+                        <span class="classic-item-date">{format_date(award.get('date', ''))}</span>
+                    </div>
+                    <div class="classic-item-description">{format_description(award.get('summary', ''))}</div>
+                </div>'''
+        awards_html += '</section>'
+
+    # References
+    references_html = ''
+    if resume_data.get('references'):
+        references_html += '<section class="classic-section"><h2 class="classic-section-title">References</h2>'
+        for ref in resume_data.get('references', []):
+            references_html += f'''
+                <div class="classic-item">
+                    <div class="classic-item-header">
+                        <span class="classic-item-title">{ref.get('name', '')}</span> | <span class="classic-item-subtitle">{ref.get('relationship', '')}</span>
+                    </div>
+                    <div class="classic-item-description">{format_description(ref.get('contact', ''))}</div>
+                </div>'''
+        references_html += '</section>'
+
     html = f'''
     <!DOCTYPE html>
     <html lang="en">
@@ -77,67 +180,15 @@ def generate_resume_html(resume_data):
                 </div>
             </header>
             <main class="classic-main">
-                {f'<section class="classic-section"><h2 class="classic-section-title">About Me</h2><div class="classic-summary">{format_description(resume_data.get("summary", ""))}</div></section>' if resume_data.get('summary') else ''}
-                {f'<section class="classic-section"><h2 class="classic-section-title">Work Experience</h2>' if resume_data.get('experience') else ''}
-                {''.join([
-                    f'''<div class="classic-item">
-                        <div class="classic-item-header">
-                            <span class="classic-item-title">{job.get('title', '')}</span> | <span class="classic-item-subtitle">{job.get('company', '')}</span>
-                            <span class="classic-item-date">{format_date(job.get('startDate', ''))} - {format_date(job.get('endDate', '')) if job.get('endDate') else 'Present'}</span>
-                        </div>
-                        <div class="classic-item-description">{format_description(job.get('description', ''))}</div>
-                    </div>''' for job in resume_data.get('experience', [])])}
-                {f'</section>' if resume_data.get('experience') else ''}
-                {f'<section class="classic-section"><h2 class="classic-section-title">Education</h2>' if resume_data.get('education') else ''}
-                {''.join([
-                    f'''<div class="classic-item">
-                        <div class="classic-item-header">
-                            <span class="classic-item-title">{edu.get('degree', '')}</span> | <span class="classic-item-subtitle">{edu.get('institution', '')}</span>
-                            <span class="classic-item-date">{format_date(edu.get('startDate', ''))} - {format_date(edu.get('endDate', '')) if edu.get('endDate') else 'Present'}</span>
-                        </div>
-                        <div class="classic-item-description">{format_description(edu.get('description', ''))}</div>
-                    </div>''' for edu in resume_data.get('education', [])])}
-                {f'</section>' if resume_data.get('education') else ''}
-                {f'<section class="classic-section"><h2 class="classic-section-title">Projects</h2>' if resume_data.get('projects') else ''}
-                {''.join([
-                    f'''<div class="classic-item">
-                        <div class="classic-item-header">
-                            <span class="classic-item-title">{project.get('title', '')}</span>
-                            <span class="classic-item-date">{', '.join(project.get('technologies', []))}</span>
-                        </div>
-                        <div class="classic-item-description">{format_description(project.get('description', ''))}</div>
-                    </div>''' for project in resume_data.get('projects', [])])}
-                {f'</section>' if resume_data.get('projects') else ''}
-                {f'<section class="classic-section"><h2 class="classic-section-title">Skills</h2><div class="classic-skills">' + ', '.join(resume_data.get('skills', {}).get('keywords', [])) + '</div></section>' if resume_data.get('skills', {}).get('keywords') else ''}
-                {f'<section class="classic-section"><h2 class="classic-section-title">Languages</h2><div class="classic-languages">' + ', '.join(resume_data.get('languages', [])) + '</div></section>' if resume_data.get('languages') else ''}
-                {f'<section class="classic-section"><h2 class="classic-section-title">Certifications</h2>' if resume_data.get('certifications') else ''}
-                {''.join([
-                    f'''<div class="classic-item">
-                        <div class="classic-item-header">
-                            <span class="classic-item-title">{cert.get('name', '')}</span> | <span class="classic-item-subtitle">{cert.get('issuingOrganization', '')}</span>
-                            <span class="classic-item-date">{format_date(cert.get('date', ''))}</span>
-                        </div>
-                    </div>''' for cert in resume_data.get('certifications', [])])}
-                {f'</section>' if resume_data.get('certifications') else ''}
-                {f'<section class="classic-section"><h2 class="classic-section-title">Awards</h2>' if resume_data.get('awards') else ''}
-                {''.join([
-                    f'''<div class="classic-item">
-                        <div class="classic-item-header">
-                            <span class="classic-item-title">{award.get('title', '')}</span> | <span class="classic-item-subtitle">{award.get('awarder', '')}</span>
-                            <span class="classic-item-date">{format_date(award.get('date', ''))}</span>
-                        </div>
-                        <div class="classic-item-description">{format_description(award.get('summary', ''))}</div>
-                    </div>''' for award in resume_data.get('awards', [])])}
-                {f'</section>' if resume_data.get('awards') else ''}
-                {f'<section class="classic-section"><h2 class="classic-section-title">References</h2>' if resume_data.get('references') else ''}
-                {''.join([
-                    f'''<div class="classic-item">
-                        <div class="classic-item-header">
-                            <span class="classic-item-title">{ref.get('name', '')}</span> | <span class="classic-item-subtitle">{ref.get('relationship', '')}</span>
-                        </div>
-                        <div class="classic-item-description">{format_description(ref.get('contact', ''))}</div>
-                    </div>''' for ref in resume_data.get('references', [])])}
-                {f'</section>' if resume_data.get('references') else ''}
+                {about_html}
+                {experience_html}
+                {education_html}
+                {projects_html}
+                {skills_html}
+                {languages_html}
+                {certifications_html}
+                {awards_html}
+                {references_html}
             </main>
         </div>
     </body>
