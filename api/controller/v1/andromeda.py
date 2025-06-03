@@ -373,7 +373,7 @@ def generate_resume_html(resume_data):
 
 def get_default_css(dynamic_height):
     """Return default CSS for the resume based on Modern template"""
-    dynamic_height -= 550 # remove some of the height
+    dynamic_height -= 300 # remove some of the height
     css = f"""
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@300;400;500;600;700&display=swap');
 
