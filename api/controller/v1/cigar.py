@@ -20,7 +20,7 @@ def generate_pdf():
         filename = f"resume_{uuid.uuid4().hex}.pdf"
         output_path = os.path.join(temp_dir, filename)
         html_content = generate_resume_html(data)
-        dynamic_height = calcHeightModern1(data)
+        dynamic_height = calcHeightModern1(data, 'cigar')
         HTML(string=html_content).write_pdf(
             output_path,
             stylesheets=[CSS(string=get_classic_css(dynamic_height))]
@@ -43,7 +43,7 @@ def export_pdf():
         if not data:
             return jsonify({'error': 'No resume data provided'}), 400
         html_content = generate_resume_html(data)
-        dynamic_height = calcHeightModern1(data)
+        dynamic_height = calcHeightModern1(data, 'cigar')
         css_content = get_classic_css(dynamic_height)
         return export_pdf_response(html_content, css_content)
     except Exception as e:
@@ -65,9 +65,10 @@ def generate_resume_html(resume_data):
             experience_html += f'''
                 <div class="classic-item">
                     <div class="classic-item-header">
-                        <span class="classic-item-title">{job.get('title', '')}</span> | <span class="classic-item-subtitle">{job.get('company', '')}</span>
+                        <span class="classic-item-title">{job.get('title', '')}</span>
                         <span class="classic-item-date">{format_date(job.get('startDate', ''))} - {format_date(job.get('endDate', '')) if job.get('endDate') else 'Present'}</span>
                     </div>
+                    <span class="classic-item-subtitle">{job.get('company', '')}</span>
                     <div class="classic-item-description">{format_description(job.get('description', ''))}</div>
                 </div>'''
         experience_html += '</section>'
@@ -80,10 +81,10 @@ def generate_resume_html(resume_data):
             education_html += f'''
                 <div class="classic-item">
                     <div class="classic-item-header">
-                        <span class="classic-item-title">{edu.get('degree', '')}</span> | <span class="classic-item-subtitle">{edu.get('institution', '')}</span>
+                        <span class="classic-item-title">{edu.get('degree', '')}</span>
                         <span class="classic-item-date">{format_date(edu.get('startDate', ''))} - {format_date(edu.get('endDate', '')) if edu.get('endDate') else 'Present'}</span>
                     </div>
-                    <div class="classic-item-description">{format_description(edu.get('description', ''))}</div>
+                    <span class="classic-item-subtitle">{edu.get('institution', '')}</span>
                 </div>'''
         education_html += '</section>'
 
@@ -149,7 +150,7 @@ def generate_resume_html(resume_data):
             references_html += f'''
                 <div class="classic-item">
                     <div class="classic-item-header">
-                        <span class="classic-item-title">{ref.get('name', '')}</span> | <span class="classic-item-subtitle">{ref.get('relationship', '')}</span>
+                        <span class="classic-item-title">{ref.get('name', '')}</span> | <span class="classic-item-subtitle">{ref.get('company', '')}</span>
                     </div>
                     <div class="classic-item-description">{format_description(ref.get('contact', ''))}</div>
                 </div>'''
@@ -198,7 +199,7 @@ def generate_resume_html(resume_data):
 
 def get_classic_css(dynamic_height):
     """Return CSS for a classic-modern resume template"""
-    dynamic_height -= 850
+    dynamic_height -= 600
     css = f'''
     @import url('https://fonts.googleapis.com/css2?family=Georgia:wght@400;700&family=Montserrat:wght@500;700&display=swap');
     @page {{

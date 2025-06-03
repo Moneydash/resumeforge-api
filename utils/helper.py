@@ -22,7 +22,7 @@ def format_date(date_str):
     except ValueError:
         return date_str
 
-def calcHeightModern1(data):
+def calcHeightModern1(data, template):
     """Calculate the height needed for the PDF based on content"""
     # Base height for header and margins
     height = 150
@@ -33,8 +33,12 @@ def calcHeightModern1(data):
 
     # Add height for experience items
     if data.get('experience'):
-        height += 50  # Section header
-        height += len(data['experience']) * 150  # Each experience item
+        if template is 'andromeda':
+            height += 50  # Section header
+            height += len(data['experience']) * 150  # Each experience item
+        else:
+            height += 50  # Section header
+            height += len(data['experience']) * 120  # Each experience item
 
     # Add height for education items
     if data.get('education'):
@@ -44,38 +48,48 @@ def calcHeightModern1(data):
     # Add height for projects
     if data.get('projects'):
         height += 50
-        height += len(data['projects']) * 130  # Projects might have tech stack lists
+        height += len(data['projects']) * 120  # Projects might have tech stack lists
 
     # Add height for skills
     if data.get('skills'):
-        height += 100
-        if data['skills'].get('programmingLanguages'):
-            height += 30 + (len(data['skills']['programmingLanguages']) // 3) * 30
-        if data['skills'].get('keywords'):
-            height += 30 + (len(data['skills']['keywords']) // 3) * 30
+        if template is 'andromeda':
+            height += 100
+            if data['skills'].get('programmingLanguages'):
+                height += 30 + (len(data['skills']['programmingLanguages']) // 3) * 30
+            if data['skills'].get('keywords'):
+                height += 30 + (len(data['skills']['keywords']) // 3) * 30
+        else:
+            height += 80
 
     # Add height for languages
     if data.get('languages'):
-        height += 50 + (len(data['languages']) // 3) * 30
+        if template is 'andromeda':
+            height += 50 + (len(data['languages']) // 3) * 30
+        else:
+            height += 50
 
     # Add height for certifications
     if data.get('certifications'):
-        height += 50
-        height += len(data['certifications']) * 80
+        if template is not 'andromeda':
+            height += 30
+            height += len(data['certifications']) * 50
 
     # Add height for awards
     if data.get('awards'):
-        height += 50
-        height += len(data['awards']) * 100
+        if template is not 'andromeda':
+            height += 50
+            height += len(data['awards']) * 85
 
     # Add height for interests
     if data.get('interests'):
-        height += 50 + (len(data['interests']) // 3) * 30
+        if template is not 'andromeda':
+            height += 30 + (len(data['interests']) // 3) * 30
 
     # Add height for references
     if data.get('references'):
-        height += 50
-        height += len(data['references']) * 120
+        if template is not 'andromeda':
+            height += 30
+            height += len(data['references']) * 80
 
     # Add some buffer for safety
     height += 100

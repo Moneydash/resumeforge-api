@@ -20,7 +20,7 @@ def generate_pdf():
         filename = f"resume_{uuid.uuid4().hex}.pdf"
         output_path = os.path.join(temp_dir, filename)
         html_content = generate_resume_html(data)
-        dynamic_height = calcHeightModern1(data)
+        dynamic_height = calcHeightModern1(data, 'milky_way')
         HTML(string=html_content).write_pdf(
             output_path,
             stylesheets=[CSS(string=get_creative_css(dynamic_height))]
@@ -43,7 +43,7 @@ def export_pdf():
         if not data:
             return jsonify({'error': 'No resume data provided'}), 400
         html_content = generate_resume_html(data)
-        dynamic_height = calcHeightModern1(data)
+        dynamic_height = calcHeightModern1(data, 'milky_way')
         css_content = get_creative_css(dynamic_height)
         return export_pdf_response(html_content, css_content)
     except Exception as e:
@@ -134,7 +134,7 @@ def generate_resume_html(resume_data):
             awards_html += f'''
                 <div class="mw-item mw-card">
                     <div class="mw-item-header">
-                        <span class="mw-item-title">{award.get('title', '')}</span> <span class="mw-item-company">@ {award.get('awarder', '')}</span>
+                        <span class="mw-item-title">{award.get('title', '')}</span>
                         <span class="mw-item-date">{format_date(award.get('date', ''))}</span>
                     </div>
                     <div class="mw-item-description">{format_description(award.get('summary', ''))}</div>
@@ -154,7 +154,7 @@ def generate_resume_html(resume_data):
             references_html += f'''
                 <div class="mw-item mw-card">
                     <div class="mw-item-header">
-                        <span class="mw-item-title">{ref.get('name', '')}</span> <span class="mw-item-company">@ {ref.get('relationship', '')}</span>
+                        <span class="mw-item-title">{ref.get('name', '')}</span> <span class="mw-item-company">@ {ref.get('company', '')}</span>
                     </div>
                     <div class="mw-item-description">{format_description(ref.get('contact', ''))}</div>
                 </div>'''
@@ -199,7 +199,7 @@ def generate_resume_html(resume_data):
 
 def get_creative_css(dynamic_height):
     """Return CSS for a creative, professional resume"""
-    dynamic_height -= 400
+    dynamic_height -= 100
     css = f"""
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Lato:wght@400;700&display=swap');
     @page {{

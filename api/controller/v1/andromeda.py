@@ -28,7 +28,7 @@ def generate_pdf():
         
         # Generate HTML content from resume data
         html_content = generate_resume_html(data)
-        dynamic_height = calcHeightModern1(data)
+        dynamic_height = calcHeightModern1(data, 'andromeda')
         # Generate PDF using WeasyPrint
         HTML(string=html_content).write_pdf(
             output_path,
@@ -55,7 +55,7 @@ def export_pdf():
         if not data:
             return jsonify({'error': 'No resume data provided'}), 400
         html_content = generate_resume_html(data)
-        dynamic_height = calcHeightModern1(data)
+        dynamic_height = calcHeightModern1(data, 'andromeda')
         css_content = get_default_css(dynamic_height)
         return export_pdf_response(html_content, css_content)
     except Exception as e:
@@ -373,7 +373,7 @@ def generate_resume_html(resume_data):
 
 def get_default_css(dynamic_height):
     """Return default CSS for the resume based on Modern template"""
-    dynamic_height -= 300 # remove some of the height
+    dynamic_height -= 250 # remove some of the height
     css = f"""
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@300;400;500;600;700&display=swap');
 
@@ -515,7 +515,7 @@ def get_default_css(dynamic_height):
     .item-title {
         font-size: 1.15rem;
         font-weight: 600;
-        margin-bottom: -0.75rem;
+        margin-bottom: 0.5rem;
         color: #1f2937;
     }
 
@@ -586,14 +586,13 @@ def get_default_css(dynamic_height):
     /* Reference Styles */
     .reference {
         background-color: #f3f4f6;
-        padding: 1.25rem;
+        padding-left: 0.25rem;
         border-radius: 6px;
         margin-bottom: 1.25rem;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     }
 
     .reference-contact {
-        margin-top: 0.75rem;
         font-size: 0.9rem;
         color: #4b5563;
     }
