@@ -128,14 +128,7 @@ def data_caching(data, template_name="andromeda"):
     cached_storage = redis_client.get(cache_key_storage)
 
     if cached_hash and cached_storage and cached_hash == data_hash:
-        if cached_storage.startswith("http"):
-            return cached_storage
-        else:
-            if current_app.supabase:
-                supabase = current_app.supabase
-                url_res = supabase.storage.from_(supabase_bucket_name).get_public_url(cached_storage)
-                return url_res
-            return cached_storage
+        return cached_storage  # Always return the storage path, never a URL
     else:
         return None
 
@@ -170,4 +163,4 @@ def upload_pdf_to_supabase(name, template_name, html_content, css_str):
         raise Exception(f"Upload failed: {res['error']['message']}")
 
     # 4. Return public URL (optional)
-    return supabase.storage.from_(supabase_bucket_name).get_public_url(storage_path)
+    return storage_path
