@@ -91,7 +91,7 @@ def generate_resume_html(resume_data):
     '''
     for social in resume_data.get('socials', []):
         html += f'''
-            {f'<a href="{social.get("link")}"><i class="fab fa-{social.get('slug')} fa-xl"></i></a>' if social.get('link') else ''}
+            {f'<a href="{social.get("link")}"><i class="fab fa-{social.get("slug")} fa-xl"></i></a>' if social.get('link') else ''}
         '''
 
 
