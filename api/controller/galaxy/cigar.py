@@ -165,13 +165,13 @@ def generate_resume_html(resume_data):
     if resume_data.get('references'):
         references_html += '<section class="classic-section"><h2 class="classic-section-title">References</h2>'
         for ref in resume_data.get('references', []):
-            references_html += f'''
+            references_html += f"""
                 <div class="classic-item">
                     <div class="classic-item-header">
-                        <span class="classic-item-title">{ref.get('name', '')}</span> | <span class="classic-item-subtitle">{ref.get('company', '')}</span>
+                        <span class="classic-item-title">{ref.get("name", "")}</span> | <span class="classic-item-subtitle">{ref.get("company", "")}</span>
                     </div>
                     <div class="classic-item-description">{format_description(ref.get('contact', ''))}</div>
-                </div>'''
+                </div>"""
         references_html += '</section>'
 
     html = f'''
@@ -198,7 +198,7 @@ def generate_resume_html(resume_data):
 
     for social in resume_data.get('socials', []):
         html += f'''
-            {f'<a href="{social.get("link")}"><i class="fab fa-{social.get('slug')} fa-lg"></i></a>' if social.get('link') else ''}
+            {f'<a href="{social.get("link")}"><i class="fab fa-{social.get("slug")} fa-lg"></i></a>' if social.get('link') else ''}
         '''
 
     html += f'''
