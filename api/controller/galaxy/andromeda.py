@@ -423,8 +423,8 @@ def generate_resume_html(resume_data):
                                 <h3 class="item-title">{ref.get('name', '')}</h3>
                                 <p class="item-subtitle">{ref.get('title', '')} at {ref.get('company', '')}</p>
                                 <div class="reference-contact">
-                                    {f'<p>Email: {ref.get('email')}</p>' if ref.get('email') else ''}
-                                    {f'<p>Phone: {ref.get('phone')}</p>' if ref.get('phone') else ''}
+                                    {f'<p>Email: {ref.get("email")}</p>' if ref.get("email") else ''}
+                                    {f'<p>Phone: {ref.get("phone")}</p>' if ref.get("phone") else ''}
                                 </div>
                             </div>
             '''
@@ -456,7 +456,7 @@ def get_default_css(dynamic_height=None):
     }}
     """
 
-    css += '''
+    css += """
     * {
         box-sizing: border-box;
     }
@@ -707,5 +707,5 @@ def get_default_css(dynamic_height=None):
     .reference-contact p {
         margin: 2px 0;
     }
-    '''
+    """
     return css
