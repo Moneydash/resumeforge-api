@@ -1,9 +1,8 @@
-from flask import request, jsonify, send_file, current_app
-from weasyprint import HTML, CSS
 import os
+from flask import redirect, request, jsonify, current_app
 import logging
 from utils.cigar_helper import buff_calc, increment_calc
-from utils.helper import css_height_calc, data_caching, filename_generator, format_date, format_description, get_output_path
+from utils.helper import css_height_calc, data_caching, format_date, format_description, upload_pdf_to_supabase
 import json
 import hashlib
 
@@ -11,6 +10,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 max_attempts = 50 # maximum attempts in loop
+supabase_bucket_name = os.getenv("SUPABASE_BUCKET_NAME", "bucket_name")
 
 def generate_pdf():
     """Generate a PDF resume from the provided data and return it as a preview (classic-modern style)"""
@@ -23,23 +23,20 @@ def generate_pdf():
         name = data.get('personal', {}).get('name')
         cached_pdf = data_caching(data, "cigar")
         if cached_pdf:
-            return send_file(
-                cached_pdf,
-                mimetype='application/pdf',
-                as_attachment=False,
-                download_name=os.path.basename(cached_pdf)
-            )
+            # If we have a cached URL, redirect to it
+            if cached_pdf.startswith("http"):
+                return redirect(cached_pdf)
+            # If we have a cached storage path, get the URL
+            else:
+                supabase = current_app.supabase
+                url_res = supabase.storage.from_(supabase_bucket_name).get_public_url(cached_pdf)
+                return redirect(url_res)
 
         html_content = generate_resume_html(data)
         buffer = buff_calc(data)
         increment = increment_calc(data)
         final_css = css_height_calc(html_content, get_classic_css, data.get('personal', {}).get('email'), 'cigar', buffer, max_attempts, increment)
-        output_path = get_output_path(name, "cigar")
-
-        HTML(string=html_content).write_pdf(
-            output_path,
-            stylesheets=[CSS(string=final_css)]
-        )
+        pdf_path = upload_pdf_to_supabase(name, "cigar", html_content, final_css)
 
         combined_data = {
             "template": "cigar",
@@ -50,15 +47,14 @@ def generate_pdf():
         redis_client = current_app.redis_client
         data_str = json.dumps(combined_data, sort_keys=True)
         data_hash = hashlib.sha256(data_str.encode()).hexdigest()
-        redis_client.set(f"{data['personal']['email']}_data_hash_cigar", data_hash)
-        redis_client.set(f"{data['personal']['email']}_pdf_path_cigar", output_path)
         
-        return send_file(
-            output_path,
-            mimetype='application/pdf',
-            as_attachment=False,
-            download_name=f"{filename_generator(name)}.pdf"
-        )
+        redis_client.set(f"{data['personal']['email']}_data_hash_cigar", data_hash)
+        redis_client.set(f"{data['personal']['email']}_storage_path_cigar", pdf_path)
+
+        supabase = current_app.supabase
+        url_res = supabase.storage.from_(supabase_bucket_name).get_public_url(pdf_path)
+        return redirect(url_res)
+
     except Exception as e:
         current_app.logger.error(f"PDF generation error: {str(e)}")
         return jsonify({'error': f'Failed to generate PDF: {str(e)}'}), 500

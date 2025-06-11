@@ -1,4 +1,5 @@
 from datetime import datetime
+from io import BytesIO
 import math
 import os
 import tempfile
@@ -8,6 +9,9 @@ from weasyprint import HTML, CSS
 import logging
 import json
 import hashlib
+from datetime import datetime
+
+supabase_bucket_name = os.getenv("SUPABASE_BUCKET_NAME", "bucket_name")
 
 def format_description(text):
     """Format description as HTML: preserve lists, convert newlines to <br> for plain text."""
@@ -99,7 +103,7 @@ def loop_process(html_content, css_content, email, template, content_height,
 
 def data_caching(data, template_name="andromeda"):
     """
-    Check if data has changed. If not, return cached PDF path.
+    Check if data has changed. If not, return cached Supabase public URL.
     Otherwise, return None to signal a regeneration is needed.
     """
     email = data.get('personal', {}).get('email')
@@ -118,15 +122,22 @@ def data_caching(data, template_name="andromeda"):
     data_hash = hashlib.sha256(data_str.encode()).hexdigest()
 
     cache_key_hash = f"{email}_data_hash_{template_name}"
-    cache_key_pdf = f"{email}_pdf_path_{template_name}"
+    cache_key_storage = f"{email}_storage_path_{template_name}"
 
     cached_hash = redis_client.get(cache_key_hash)
-    cached_pdf_path = redis_client.get(cache_key_pdf)
+    cached_storage = redis_client.get(cache_key_storage)
 
-    if cached_hash and cached_pdf_path and cached_hash == data_hash:
-        return cached_pdf_path  # You can call `send_file` in your main route
+    if cached_hash and cached_storage and cached_hash == data_hash:
+        if cached_storage.startswith("http"):
+            return cached_storage
+        else:
+            if current_app.supabase:
+                supabase = current_app.supabase
+                url_res = supabase.storage.from_(supabase_bucket_name).get_public_url(cached_storage)
+                return url_res
+            return cached_storage
     else:
-        return None  # Indicates data changed or no cache
+        return None
 
 def get_output_path(name, template_name):
     base_dir = os.path.join(tempfile.gettempdir(), 'resumeforge')
@@ -134,3 +145,29 @@ def get_output_path(name, template_name):
 
     filename = f"{filename_generator(name)}_{template_name}"
     return os.path.join(base_dir, f"{filename}.pdf")
+
+def upload_pdf_to_supabase(name, template_name, html_content, css_str):
+    # Generate PDF into memory
+    pdf_buffer = BytesIO()
+    HTML(string=html_content).write_pdf(pdf_buffer, stylesheets=[CSS(string=css_str)])
+    pdf_buffer.seek(0)
+
+    # Build file name
+    current_datetime = datetime.now()
+    formatted_dt = current_datetime.strftime("%Y%m%d%H%M%S")
+    filename = f"{filename_generator(name)}_{template_name}_{formatted_dt}.pdf"
+    storage_path = f"resumes/{filename}"
+
+    # Upload to Supabase
+    supabase = current_app.supabase
+    res = supabase.storage.from_(supabase_bucket_name).upload(
+        path=storage_path,
+        file=pdf_buffer.getvalue(),
+        file_options={"content-type": "application/pdf"}
+    )
+
+    if isinstance(res, dict) and "error" in res:
+        raise Exception(f"Upload failed: {res['error']['message']}")
+
+    # 4. Return public URL (optional)
+    return supabase.storage.from_(supabase_bucket_name).get_public_url(storage_path)

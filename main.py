@@ -3,6 +3,7 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from upstash_redis import Redis
 from dotenv import load_dotenv
+from supabase import Client, create_client
 
 from api.routes.galaxy.pdf import generate_bp
 
@@ -16,11 +17,18 @@ def create_app():
         raise ValueError("UPSTASH_REDIS_TOKEN environment variable is required")
     
     redis_url = 'https://ace-pegasus-31891.upstash.io'
-    
     redis_client = Redis(redis_url, token)
-
     # attach redis into the app
     app.redis_client = redis_client
+
+    # ✅ Set up Supabase
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")  # Must be the SERVICE role key
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables are required")
+
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    app.supabase = supabase
 
     try:
         CORS(app, resources={r'/*': {'origins': '*'}})

@@ -1,14 +1,14 @@
-from flask import Blueprint, request, jsonify, send_file, current_app
-from weasyprint import HTML, CSS
+import hashlib
+import json
+from flask import request, jsonify, current_app, redirect
 import os
-import tempfile
-import uuid
-from datetime import datetime
 import logging
-from utils.helper import format_description
+from utils.helper import data_caching, format_description, upload_pdf_to_supabase
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+supabase_bucket_name = os.getenv("SUPABASE_BUCKET_NAME", "bucket_name")
 
 def generate_pdf():
     """Generate a minimal PDF resume for new grads/interns (summary, skills, projects, interests only)"""
@@ -16,23 +16,38 @@ def generate_pdf():
         data = request.get_json()
         if not data:
             return jsonify({'error': 'No resume data provided'}), 400
-        temp_dir = tempfile.gettempdir()
-        base_dir = os.path.join(temp_dir, 'resumeforge')
-        os.makedirs(base_dir, exist_ok=True)
 
-        filename = f"resume_{uuid.uuid4().hex}.pdf"
-        output_path = os.path.join(base_dir, filename)
+        name = data.get('personal', {}).get('name')
+        cached_pdf = data_caching(data, "comet")
+        if cached_pdf:
+            # If we have a cached URL, redirect to it
+            if cached_pdf.startswith("http"):
+                return redirect(cached_pdf)
+            # If we have a cached storage path, get the URL
+            else:
+                supabase = current_app.supabase
+                url_res = supabase.storage.from_(supabase_bucket_name).get_public_url(cached_pdf)
+                return redirect(url_res)
+
         html_content = generate_resume_html(data)
-        HTML(string=html_content).write_pdf(
-            output_path,
-            stylesheets=[CSS(string=get_minimal_css())]
-        )
-        return send_file(
-            output_path,
-            mimetype='application/pdf',
-            as_attachment=False,
-            download_name=f"resume_{datetime.now().strftime('%Y%m%d')}.pdf"
-        )
+        pdf_path = upload_pdf_to_supabase(name, "comet", html_content, get_minimal_css())
+
+        combined_data = {
+            "template": "comet",
+            "resume_data": data
+        }
+
+        redis_client = current_app.redis_client
+        data_str = json.dumps(combined_data, sort_keys=True)
+        data_hash = hashlib.sha256(data_str.encode()).hexdigest()
+
+        redis_client.set(f"{data['personal']['email']}_data_hash_comet", data_hash)
+        redis_client.set(f"{data['personal']['email']}_storage_path_comet", pdf_path)
+
+        supabase = current_app.supabase
+        url_res = supabase.storage.from_(supabase_bucket_name).get_public_url(pdf_path)
+        return redirect(url_res)
+
     except Exception as e:
         current_app.logger.error(f"PDF generation error: {str(e)}")
         return jsonify({'error': f'Failed to generate PDF: {str(e)}'}), 500
