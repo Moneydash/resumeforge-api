@@ -1,14 +1,16 @@
-from flask import Blueprint, request, jsonify, send_file, current_app
+import hashlib
+from pathlib import Path
+from flask import request, jsonify, send_file, current_app
 from weasyprint import HTML, CSS
 import os
-import tempfile
-import uuid
-from datetime import datetime
 import logging
-from utils.helper import format_date, format_description, calcHeightModern1, export_pdf_response
+from utils.helper import css_height_calc, data_caching, filename_generator, format_date, format_description, get_output_path
+import json
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+max_attempts = 50 # maximum attempts in loop
 
 def generate_pdf():
     """Generate a creative, professional PDF resume (Milky Way template)"""
@@ -16,36 +18,46 @@ def generate_pdf():
         data = request.get_json()
         if not data:
             return jsonify({'error': 'No resume data provided'}), 400
-        temp_dir = tempfile.gettempdir()
-        filename = f"resume_{uuid.uuid4().hex}.pdf"
-        output_path = os.path.join(temp_dir, filename)
+        
+        name = data.get('personal', {}).get('name')
+        cached_pdf = data_caching(data, "milky_way")
+        if cached_pdf:
+            return send_file(
+                cached_pdf,
+                mimetype='application/pdf',
+                as_attachment=False,
+                download_name=os.path.basename(cached_pdf)
+            )
+
         html_content = generate_resume_html(data)
-        dynamic_height = calcHeightModern1(data, 'milky_way')
+        buffer = 0.2
+        increment = (len(data.get('experience', [])) // 2) * 50
+        final_css = css_height_calc(html_content, get_creative_css, data.get('personal', {}).get('email'), 'milky_way', buffer, max_attempts, increment)
+        output_path = get_output_path(name, "milky_way")
+
         HTML(string=html_content).write_pdf(
             output_path,
-            stylesheets=[CSS(string=get_creative_css(dynamic_height))]
+            stylesheets=[CSS(string=final_css)]
         )
+
+        combined_data = {
+            "template": "milky_way",
+            "resume_data": data
+        }
+
+        # Cache new data and PDF path
+        redis_client = current_app.redis_client
+        data_str = json.dumps(combined_data, sort_keys=True)
+        data_hash = hashlib.sha256(data_str.encode()).hexdigest()
+        redis_client.set(f"{data['personal']['email']}_data_hash_milky_way", data_hash)
+        redis_client.set(f"{data['personal']['email']}_pdf_path_milky_way", output_path)
+
         return send_file(
             output_path,
             mimetype='application/pdf',
             as_attachment=False,
-            download_name=f"resume_{datetime.now().strftime('%Y%m%d')}.pdf"
+            download_name=f"{filename_generator(name)}.pdf"
         )
-    except Exception as e:
-        current_app.logger.error(f"PDF generation error: {str(e)}")
-        return jsonify({'error': f'Failed to generate PDF: {str(e)}'}), 500
-
-def export_pdf():
-    """Generate a PDF resume from the provided data and export it as a PDF File"""
-    try:
-        # Get resume data from request
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No resume data provided'}), 400
-        html_content = generate_resume_html(data)
-        dynamic_height = calcHeightModern1(data, 'milky_way')
-        css_content = get_creative_css(dynamic_height)
-        return export_pdf_response(html_content, css_content)
     except Exception as e:
         current_app.logger.error(f"PDF generation error: {str(e)}")
         return jsonify({'error': f'Failed to generate PDF: {str(e)}'}), 500
@@ -79,11 +91,11 @@ def generate_resume_html(resume_data):
         for edu in resume_data.get('education', []):
             education_html += f'''
                 <div class="mw-item mw-card">
-                    <div class="mw-item-header">
-                        <span class="mw-item-title">{edu.get('degree', '')}</span> <span class="mw-item-company">@ {edu.get('institution', '')}</span>
+                    <span class="mw-item-title">{edu.get('degree', '')}</span> 
+                    <div class="mw-item-header" style="margin-top:0.5rem;">
+                        <span class="mw-item-company" style="margin-left:0;m">@ {edu.get('institution', '')}</span>
                         <span class="mw-item-date">{format_date(edu.get('startDate', ''))} - {format_date(edu.get('endDate', '')) if edu.get('endDate') else 'Present'}</span>
                     </div>
-                    <div class="mw-item-description">{format_description(edu.get('description', ''))}</div>
                 </div>'''
         education_html += '</section>'
 
@@ -103,14 +115,21 @@ def generate_resume_html(resume_data):
         projects_html += '</section>'
 
     # Skills
-    skills_html = ''
-    if resume_data.get('skills', {}).get('keywords'):
-        skills_html = f'<section class="mw-section"><h2 class="mw-section-title">Skills</h2><div class="mw-skills">' + ' '.join([f'<span class="mw-skill-pill">{skill}</span>' for skill in resume_data.get('skills', {}).get('keywords', [])]) + '</div></section>'
+    all_keywords = []
+    for skill in resume_data.get('skills', []):
+        all_keywords.extend(skill.get('keywords', []))
+
+    skills_html = (
+        '<section class="mw-section"><h2 class="mw-section-title">Skills</h2>'
+        '<div class="mw-skills">'
+        + ' '.join([f'<span class="mw-skill-pill">{keyword}</span>' for keyword in all_keywords])
+        + '</div></section>'
+    )
 
     # Languages
     languages_html = ''
     if resume_data.get('languages'):
-        languages_html = f'<section class="mw-section"><h2 class="mw-section-title">Languages</h2><div class="mw-languages">' + ', '.join(resume_data.get('languages', [])) + '</div></section>'
+        languages_html = f'<section class="mw-section"><h2 class="mw-section-title">Languages</h2><div class="mw-languages">' + ' '.join([f'<span class="mw-skill-pill">{lang}</span>' for lang in resume_data.get('languages', [])]) + '</div></section>'
 
     # Certifications
     certifications_html = ''
@@ -144,7 +163,12 @@ def generate_resume_html(resume_data):
     # Interests
     interests_html = ''
     if resume_data.get('interests'):
-        interests_html = f'<section class="mw-section"><h2 class="mw-section-title">Interests</h2><div class="mw-interests">' + ', '.join(resume_data.get('interests', [])) + '</div></section>'
+        interests_html = (
+            '<section class="mw-section"><h2 class="mw-section-title">Interests</h2>'
+            '<div class="mw-interests">'
+            + ' '.join([f'<span class="mw-skill-pill">{interest}</span>' for interest in resume_data.get('interests', [])])
+            + '</div></section>'
+        )
 
     # References
     references_html = ''
@@ -167,6 +191,9 @@ def generate_resume_html(resume_data):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{resume_data.get('personal', {}).get('name', 'Resume')}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
     </head>
     <body>
         <div class="mw-container">
@@ -201,7 +228,6 @@ def get_creative_css(dynamic_height):
     """Return CSS for a creative, professional resume"""
     dynamic_height -= 100
     css = f"""
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Lato:wght@400;700&display=swap');
     @page {{
         margin: 0;
         size: 612pt {dynamic_height}pt;
@@ -210,7 +236,7 @@ def get_creative_css(dynamic_height):
 
     css += """
     body {
-        font-family: 'Lato', Arial, Helvetica, sans-serif;
+        font-family: "Lato", Arial, Helvetica, sans-serif;
         color: #232323;
         margin: 0;
         padding: 0;
@@ -239,7 +265,7 @@ def get_creative_css(dynamic_height):
         z-index: 1;
     }
     .mw-name {
-        font-family: 'Poppins', Arial, sans-serif;
+        font-family: 'Lato', Arial, sans-serif;
         font-size: 2.4rem;
         font-weight: 700;
         margin: 0;
@@ -248,7 +274,7 @@ def get_creative_css(dynamic_height):
         letter-spacing: 1px;
     }
     .mw-headline {
-        font-family: 'Poppins', Arial, sans-serif;
+        font-family: 'Lato', Arial, sans-serif;
         font-size: 1.18rem;
         font-weight: 600;
         margin: 0.5rem 0 0.8rem 0;
@@ -272,17 +298,17 @@ def get_creative_css(dynamic_height):
         text-decoration: underline dotted;
     }
     .mw-main {
-        padding: 2.2rem 2.5rem 2.5rem 2.5rem;
+        padding: 1rem 2rem 2rem 2rem;
     }
     .mw-section {
-        margin-bottom: 1.7rem;
+        margin-bottom: 0.5rem;
     }
     .mw-section-title {
-        font-family: 'Poppins', Arial, sans-serif;
+        font-family: 'Lato', Arial, sans-serif;
         font-size: 1.12rem;
         font-weight: 700;
         color: #7b2ff2;
-        margin-bottom: 0.7rem;
+        margin-bottom: 0.5rem;
         letter-spacing: 0.7px;
         border-left: 5px solid #f357a8;
         padding-left: 0.75rem;
@@ -292,7 +318,7 @@ def get_creative_css(dynamic_height):
         box-shadow: 0 1px 4px rgba(243,87,168,0.04);
     }
     .mw-item {
-        margin-bottom: 1.2rem;
+        margin-bottom: 0.5rem;
     }
     .mw-card {
         background: #f8f9fa;
@@ -303,7 +329,7 @@ def get_creative_css(dynamic_height):
     }
     .mw-item-header {
         font-size: 1.04rem;
-        font-family: 'Poppins', Arial, sans-serif;
+        font-family: 'Lato', Arial, sans-serif;
         font-weight: 600;
         color: #232323;
         margin-bottom: 0.18rem;
@@ -334,6 +360,27 @@ def get_creative_css(dynamic_height):
         line-height: 1.6;
         text-align: justify;
     }
+    ul.list-disc.ml-3,
+    ul.ml-3 {
+        margin-left: 0 !important;
+        padding-left: 1em; /* keep bullet indent, but not excessive */
+    }
+    ul.list-disc {
+        list-style-type: disc;
+    }
+
+    ul.list-disc li {
+        margin-top: 0;           /* No extra space before the first bullet */
+        margin-bottom: 0.5em;    /* Small space after each bullet */
+    }
+
+    ul.list-disc li:not(:first-child) {
+        margin-top: -6px;        /* Reduce space between bullets after the first */
+    }
+    ul.list-disc li p {
+        margin: 0;
+        padding: 0;
+    }
     .mw-skills, .mw-languages, .mw-interests {
         font-size: 0.98rem;
         color: #232323;
@@ -349,7 +396,7 @@ def get_creative_css(dynamic_height):
         padding: 0.27rem 0.95rem;
         border-radius: 50px;
         font-size: 0.92rem;
-        font-family: 'Poppins', Arial, sans-serif;
+        font-family: 'Lato', Arial, sans-serif;
         font-weight: 600;
         margin-bottom: 0.2rem;
         box-shadow: 0 1px 3px rgba(123,47,242,0.09);
@@ -359,7 +406,7 @@ def get_creative_css(dynamic_height):
         font-size: 0.95rem;
         color: #f357a8;
         margin-left: 0.6rem;
-        font-family: 'Poppins', Arial, sans-serif;
+        font-family: 'Lato', Arial, sans-serif;
     }
     """
     return css

@@ -5,7 +5,7 @@ import tempfile
 import uuid
 from datetime import datetime
 import logging
-from utils.helper import format_description, export_pdf_response
+from utils.helper import format_description
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -34,20 +34,6 @@ def generate_pdf():
         current_app.logger.error(f"PDF generation error: {str(e)}")
         return jsonify({'error': f'Failed to generate PDF: {str(e)}'}), 500
 
-def export_pdf():
-    """Generate a PDF resume from the provided data and export it as a PDF File"""
-    try:
-        # Get resume data from request
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No resume data provided'}), 400
-        html_content = generate_resume_html(data)
-        css_content = get_minimal_css()
-        return export_pdf_response(html_content, css_content)
-    except Exception as e:
-        current_app.logger.error(f"PDF generation error: {str(e)}")
-        return jsonify({'error': f'Failed to generate PDF: {str(e)}'}), 500
-
 def generate_resume_html(resume_data):
     """Generate HTML for minimal resume (summary, skills, projects, interests)"""
     # About Me
@@ -56,9 +42,11 @@ def generate_resume_html(resume_data):
         about_html = f'<section class="comet-section"><h2 class="comet-section-title">About Me</h2><div class="comet-summary">{format_description(resume_data.get("summary", ""))}</div></section>'
 
     # Skills
-    skills_html = ''
-    if resume_data.get('skills', {}).get('keywords'):
-        skills_html = f'<section class="comet-section"><h2 class="comet-section-title">Skills</h2><div class="comet-skills">' + ', '.join(resume_data.get('skills', {}).get('keywords', [])) + '</div></section>'
+    all_keywords = []
+    for skill in resume_data.get('skills', []):
+        all_keywords.extend(skill.get('keywords', []))
+
+    skills_html = ('<section class="comet-section"><h2 class="comet-section-title">Skills</h2><div class="comet-skills">' + ', '.join(all_keywords) + '</div></section>')
 
     # Projects
     projects_html = ''
@@ -87,6 +75,9 @@ def generate_resume_html(resume_data):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{resume_data.get('personal', {}).get('name', 'Resume')}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
     </head>
     <body>
         <div class="comet-container">
@@ -114,13 +105,12 @@ def generate_resume_html(resume_data):
 def get_minimal_css():
     """Return CSS for a minimal, clean resume"""
     css = f'''
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
     @page {{
         margin: 0;
-        size: letter;
+        size: Legal;
     }}
     body {{
-        font-family: 'Inter', Arial, Helvetica, sans-serif;
+        font-family: 'Poppins', Arial, Helvetica, sans-serif;
         color: #232323;
         background: #fff;
         margin: 0;

@@ -1,16 +1,23 @@
 from datetime import datetime
+import math
 import os
 import tempfile
 import uuid
 from flask import send_file, current_app
 from weasyprint import HTML, CSS
+import logging
+import json
+import hashlib
 
 def format_description(text):
-    """Convert newlines to HTML line breaks"""
+    """Format description as HTML: preserve lists, convert newlines to <br> for plain text."""
     if not text:
         return ''
-    # Replace newlines with <br> tags
-    return text.replace('\n', '<br>')
+    # If already contains a list, return as-is (assume HTML is safe/trusted)
+    if '<ul' in text or '<ol' in text:
+        return text
+    # Otherwise, treat as plain text and replace newlines
+    return text.replace('</p>', '</p><br>').replace('\n', '<br>')
 
 def format_date(date_str):
     """Format date from YYYY-MM to Month YYYY"""
@@ -22,98 +29,105 @@ def format_date(date_str):
     except ValueError:
         return date_str
 
-def calcHeightModern1(data, template):
-    """Calculate the height needed for the PDF based on content"""
-    # Base height for header and margins
-    height = 150
+def filename_generator(name):
+    text_split = name.split()
+    text_join = '-'.join(text_split)
+    return text_join
 
-    # Add height for summary
-    if data.get('summary'):
-        height += 100
+def css_height_calc(html_content, css_content, email, template, buffer, max_attempts=50, increment=50):
+    redis_client = current_app.redis_client
+    cache_key_content = f"{email}_content_height_{template}"
 
-    # Add height for experience items
-    if data.get('experience'):
-        if template is 'andromeda':
-            height += 50  # Section header
-            height += len(data['experience']) * 150  # Each experience item
-        else:
-            height += 50  # Section header
-            height += len(data['experience']) * 120  # Each experience item
+    # Get cached values if they exist
+    cached_content_height = redis_client.get(cache_key_content)
 
-    # Add height for education items
-    if data.get('education'):
-        height += 50
-        height += len(data['education']) * 100
+    # Always get current content height from a no-height CSS
+    html = HTML(string=html_content)
+    initial_render = html.render(stylesheets=[CSS(string=css_content(1009))])
+    content_height = round(initial_render.pages[0].height, 2)
+    buff_height = content_height * buffer
+    content_height = max(content_height + buff_height, 100)
 
-    # Add height for projects
-    if data.get('projects'):
-        height += 50
-        height += len(data['projects']) * 120  # Projects might have tech stack lists
+    redis_client.set(cache_key_content, content_height)
 
-    # Add height for skills
-    if data.get('skills'):
-        if template is 'andromeda':
-            height += 100
-            if data['skills'].get('programmingLanguages'):
-                height += 30 + (len(data['skills']['programmingLanguages']) // 3) * 30
-            if data['skills'].get('keywords'):
-                height += 30 + (len(data['skills']['keywords']) // 3) * 30
-        else:
-            height += 80
-
-    # Add height for languages
-    if data.get('languages'):
-        if template is 'andromeda':
-            height += 50 + (len(data['languages']) // 3) * 30
-        else:
-            height += 50
-
-    # Add height for certifications
-    if data.get('certifications'):
-        if template is not 'andromeda':
-            height += 30
-            height += len(data['certifications']) * 50
-
-    # Add height for awards
-    if data.get('awards'):
-        if template is not 'andromeda':
-            height += 50
-            height += len(data['awards']) * 85
-
-    # Add height for interests
-    if data.get('interests'):
-        if template is not 'andromeda':
-            height += 30 + (len(data['interests']) // 3) * 30
-
-    # Add height for references
-    if data.get('references'):
-        if template is not 'andromeda':
-            height += 30
-            height += len(data['references']) * 80
-
-    # Add some buffer for safety
-    height += 100
-
-    return height
-
-def export_pdf_response(html_content, css_content, output_filename=None):
-    """
-    Render HTML+CSS to PDF and return a Flask send_file response.
-    """
-    try:
-        temp_dir = tempfile.gettempdir()
-        filename = output_filename or f"resume_{uuid.uuid4().hex}.pdf"
-        output_path = os.path.join(temp_dir, filename)
-        HTML(string=html_content).write_pdf(
-            output_path,
-            stylesheets=[CSS(string=css_content)]
+    logging.info(f"Content Height: {content_height}")
+    logging.info(f"Cached Content Height: {cached_content_height}")
+    logging.info(f"number of Pages: {len(initial_render.pages)}")
+    logging.info(f"Buffer: {buffer}")
+    if len(initial_render.pages) > 1:
+        final_height = loop_process(
+            html_content=html_content,
+            css_content=css_content,
+            email=email,
+            template=template,
+            content_height=content_height,
+            redis_client=redis_client,
+            max_attempts=max_attempts,
+            increment=increment
         )
-        return send_file(
-            output_path,
-            mimetype='application/pdf',
-            as_attachment=False,
-            download_name=filename
-        )
-    except Exception as e:
-        current_app.logger.error(f"PDF export error: {str(e)}")
-        return {"error": f"Failed to export PDF: {str(e)}"}, 500
+    else:
+        final_height = content_height
+
+    return css_content(dynamic_height=final_height)
+
+def loop_process(html_content, css_content, email, template, content_height,
+                 redis_client, max_attempts=50, increment=50):
+    min_height = 1009  # never go below this
+    content_height = max(content_height, min_height)
+    logging.info(f"Content Height loop process: {content_height}")
+
+    initial_target = math.ceil(content_height)
+    height_diff = initial_target - min_height
+    final_height = abs(height_diff) + min_height
+
+    logging.info(f"Diff me: {height_diff}")
+    logging.info(f"[🔍] Loop starting. Est height: {final_height}pt")
+
+    for i in range(max_attempts):
+        css = css_content(dynamic_height=final_height)
+        rendered = HTML(string=html_content).render(stylesheets=[CSS(string=css)])
+
+        if len(rendered.pages) == 1:
+            logging.info(f"[✅] Final height: {final_height}pt in {i + 1} loop(s)")
+            redis_client.set(f"{email}_css_height_{template}", final_height)
+            break
+
+        final_height += increment
+        logging.info(f"[↗] Page overflow, increased to {final_height}pt")
+
+    return final_height
+
+def data_caching(data, template_name="andromeda"):
+    """
+    Check if data has changed. If not, return cached PDF path.
+    Otherwise, return None to signal a regeneration is needed.
+    """
+    email = data.get('personal', {}).get('email')
+    if not email:
+        return None
+
+    redis_client = current_app.redis_client
+
+    combined_data = {
+        "template": template_name,
+        "resume_data": data
+    }
+
+    # Hash the data for comparison
+    data_str = json.dumps(combined_data, sort_keys=True)
+    data_hash = hashlib.sha256(data_str.encode()).hexdigest()
+
+    cache_key_hash = f"{email}_data_hash_{template_name}"
+    cache_key_pdf = f"{email}_pdf_path_{template_name}"
+
+    cached_hash = redis_client.get(cache_key_hash)
+    cached_pdf_path = redis_client.get(cache_key_pdf)
+
+    if cached_hash and cached_pdf_path and cached_hash.decode() == data_hash:
+        return cached_pdf_path.decode()  # You can call `send_file` in your main route
+    else:
+        return None  # Indicates data changed or no cache
+
+def get_output_path(name, template_name):
+    filename = f"{filename_generator(name)}_{template_name}"
+    return os.path.join(tempfile.gettempdir(), f"{filename}.pdf")

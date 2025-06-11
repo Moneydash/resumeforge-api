@@ -1,63 +1,61 @@
-from flask import Blueprint, request, jsonify, render_template, send_file, current_app
+from flask import request, jsonify, send_file, current_app
 from weasyprint import HTML, CSS
 import os
-import json
 import tempfile
-import uuid
-from datetime import datetime
 import logging
-from utils.helper import calcHeightModern1, format_date, format_description, export_pdf_response
+from utils.helper import css_height_calc, data_caching, filename_generator, format_date, format_description, get_output_path
+import json
+import hashlib
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+max_attempts = 50 # maximum attempts in loop
+
 def generate_pdf():
-    """Generate a PDF resume from the provided data and return it as a preview"""
     try:
-        # Get resume data from request
         data = request.get_json()
-        
         if not data:
             return jsonify({'error': 'No resume data provided'}), 400
-            
-        # Create a temporary directory to store the generated PDF
-        temp_dir = tempfile.gettempdir()
-        filename = f"resume_{uuid.uuid4().hex}.pdf"
-        output_path = os.path.join(temp_dir, filename)
-        
-        # Generate HTML content from resume data
+
+        name = data.get('personal', {}).get('name')
+        cached_pdf = data_caching(data, "andromeda")
+        if cached_pdf:
+            return send_file(
+                cached_pdf,
+                mimetype='application/pdf',
+                as_attachment=False,
+                download_name=os.path.basename(cached_pdf)
+            )
+
+        # Otherwise generate the PDF
         html_content = generate_resume_html(data)
-        dynamic_height = calcHeightModern1(data, 'andromeda')
-        # Generate PDF using WeasyPrint
-        HTML(string=html_content).write_pdf(
-            output_path,
-            stylesheets=[CSS(string=get_default_css(dynamic_height))]
-        )
-        
-        # Return the generated PDF file as a preview (not as an attachment)
+        increment = (len(data.get('experience', [])) // 5) * 50
+        final_css = css_height_calc(html_content, get_default_css, data.get('personal', {}).get('email'), 'andromeda', 0, max_attempts, increment)
+        output_path = get_output_path(name, "andromeda")
+
+        HTML(string=html_content).write_pdf(output_path, stylesheets=[CSS(string=final_css)])
+
+        combined_data = {
+            "template": "andromeda",
+            "resume_data": data
+        }
+
+        # Cache new data and PDF path
+        redis_client = current_app.redis_client
+        data_str = json.dumps(combined_data, sort_keys=True)
+        data_hash = hashlib.sha256(data_str.encode()).hexdigest()
+        redis_client.set(f"{data['personal']['email']}_data_hash_andromeda", data_hash)
+        redis_client.set(f"{data['personal']['email']}_pdf_path_andromeda", output_path)
+
         return send_file(
             output_path,
             mimetype='application/pdf',
             as_attachment=False,
-            download_name=f"resume_{datetime.now().strftime('%Y%m%d')}.pdf"
+            download_name=f"{filename_generator(name)}.pdf"
         )
-        
-    except Exception as e:
-        current_app.logger.error(f"PDF generation error: {str(e)}")
-        return jsonify({'error': f'Failed to generate PDF: {str(e)}'}), 500
 
-def export_pdf():
-    """Generate a PDF resume from the provided data and export it as a PDF File"""
-    try:
-        # Get resume data from request
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No resume data provided'}), 400
-        html_content = generate_resume_html(data)
-        dynamic_height = calcHeightModern1(data, 'andromeda')
-        css_content = get_default_css(dynamic_height)
-        return export_pdf_response(html_content, css_content)
     except Exception as e:
         current_app.logger.error(f"PDF generation error: {str(e)}")
         return jsonify({'error': f'Failed to generate PDF: {str(e)}'}), 500
@@ -72,6 +70,9 @@ def generate_resume_html(resume_data):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{resume_data.get('personal', {}).get('name', 'Resume')}</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/><link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap" rel="stylesheet">
     </head>
     <body>
         <div class="resume-container">
@@ -87,12 +88,16 @@ def generate_resume_html(resume_data):
                 
                 <!-- Social Links -->
                 <div class="social-links">
-                    {f'<a href="https://linkedin.com/in/{resume_data.get("socials", {}).get("linkedIn", "").strip("https://linkedin.com/in/")}">LinkedIn</a>' if resume_data.get('socials', {}).get('linkedIn') else ''}
-                    {f'<a href="https://github.com/{resume_data.get("socials", {}).get("github", "").strip("https://github.com/")}">GitHub</a>' if resume_data.get('socials', {}).get('github') else ''}
-                    {f'<a href="https://twitter.com/{resume_data.get("socials", {}).get("twitter", "").strip("https://twitter.com/")}">Twitter</a>' if resume_data.get('socials', {}).get('twitter') else ''}
+    '''
+    for social in resume_data.get('socials', []):
+        html += f'''
+            {f'<a href="{social.get("link")}"><i class="fab fa-{social.get('slug')} fa-xl"></i></a>' if social.get('link') else ''}
+        '''
+
+
+    html += f'''
                 </div>
             </header>
-            
             <!-- Main Content with two-column layout -->
             <div class="main-content">
                 <!-- Left Column: Summary, Experience, Education, Projects -->
@@ -127,28 +132,94 @@ def generate_resume_html(resume_data):
         '''
     
     # Education
-    if resume_data.get('education'):
-        html += '''
-                <section class="section">
-                    <h2 class="section-title">Education</h2>
-                    <div class="section-content">
-        '''
-        
-        for edu in resume_data.get('education', []):
-            html += f'''
-                        <div class="item">
-                            <div class="item-header">
-                                <h3 class="item-title">{edu.get('degree', '')}</h3>
-                                <p class="item-subtitle">{edu.get('institution', '')}</p>
-                                <div class="item-date">{format_date(edu.get('startDate', ''))} - {format_date(edu.get('endDate')) if edu.get('endDate') else 'Present'}</div>
-                            </div>
-                        </div>
+    if resume_data.get('experience') and len(resume_data['experience']) <= 4:
+        if resume_data.get('education'):
+            html += '''
+                    <section class="section">
+                        <h2 class="section-title">Education</h2>
+                        <div class="section-content">
             '''
             
-        html += '''
-                    </div>
-                </section>
-        '''
+            for edu in resume_data.get('education', []):
+                html += f'''
+                            <div class="item" style="margin-bottom:1.5rem;">
+                                <div class="item-header">
+                                    <h3 class="item-title">{edu.get('degree', '')}</h3>
+                                    <p class="item-subtitle">{edu.get('institution', '')}</p>
+                                    <div class="item-date">{format_date(edu.get('startDate', ''))} - {format_date(edu.get('endDate')) if edu.get('endDate') else 'Present'}</div>
+                                </div>
+                            </div>
+                '''
+                
+            html += '''
+                        </div>
+                    </section>
+            '''
+
+    # Languages
+    if resume_data.get('experience') and len(resume_data['experience']) <= 2:
+        if resume_data.get('languages'):
+            html += '''
+                        <section class="section">
+                            <h2 class="section-title">Languages</h2>
+                            <div class="section-content">
+                                <div class="languages">
+            '''
+            
+            for language in resume_data.get('languages', []):
+                html += f'''
+                                    <span class="language">{language}</span>
+                '''
+                
+            html += '''
+                                </div>
+                            </div>
+                        </section>
+            '''
+    
+        # Certifications
+        if resume_data.get('certifications'):
+            html += '''
+                        <section class="section">
+                            <h2 class="section-title">Certifications</h2>
+                            <div class="section-content">
+            '''
+            
+            for cert in resume_data.get('certifications', []):
+                html += f'''
+                                <div class="item">
+                                    <div class="item-header">
+                                        <h3 class="item-title">{cert.get('name', '')}</h3>
+                                        <p class="item-subtitle">{cert.get('issuingOrganization', '')}</p>
+                                        <div class="item-date">{format_date(cert.get('date', ''))}</div>
+                                    </div>
+                                </div>
+                '''
+                
+            html += '''
+                            </div>
+                        </section>
+            '''
+
+        # Interests
+        if resume_data.get('interests'):
+            html += '''
+                        <section class="section">
+                            <h2 class="section-title">Interests</h2>
+                            <div class="section-content">
+                                <div class="interests">
+            '''
+            
+            for interest in resume_data.get('interests', []):
+                html += f'''
+                                    <span class="interest">{interest}</span>
+                '''
+                
+            html += '''
+                                </div>
+                            </div>
+                        </section>
+            '''
     
     # Close left column
     html += '''
@@ -158,54 +229,57 @@ def generate_resume_html(resume_data):
                 <div class="right-column">
     '''
     
-    # Skills
-    if resume_data.get('skills', {}).get('programmingLanguages') or resume_data.get('skills', {}).get('keywords'):
-        html += '''
+    # Education
+    if resume_data.get('experience') and len(resume_data['experience']) > 4:
+        if resume_data.get('education'):
+            html += '''
                     <section class="section">
-                        <h2 class="section-title">Skills</h2>
+                        <h2 class="section-title">Education</h2>
                         <div class="section-content">
-        '''
-        
-        # Programming languages
-        if resume_data.get('skills', {}).get('programmingLanguages'):
-            html += '''
-                            <div class="skill-group">
-                                <h3 class="skill-group-title">Programming Languages</h3>
-                                <div class="skill-keywords">
             '''
             
-            for lang in resume_data.get('skills', {}).get('programmingLanguages', []):
+            for edu in resume_data.get('education', []):
                 html += f'''
-                                    <span class="keyword">{lang}</span>
+                            <div class="item" style="margin-bottom:1.5rem;">
+                                <div class="item-header">
+                                    <h3 class="item-title">{edu.get('degree', '')}</h3>
+                                    <p class="item-subtitle">{edu.get('institution', '')}</p>
+                                    <div class="item-date">{format_date(edu.get('startDate', ''))} - {format_date(edu.get('endDate')) if edu.get('endDate') else 'Present'}</div>
+                                </div>
+                            </div>
                 '''
                 
             html += '''
-                                </div>
-                            </div>
-            '''
-        
-        # Other skills/keywords
-        if resume_data.get('skills', {}).get('keywords'):
-            html += '''
-                            <div class="skill-group">
-                                <h3 class="skill-group-title">Technologies & Tools</h3>
-                                <div class="skill-keywords">
-            '''
-            
-            for keyword in resume_data.get('skills', {}).get('keywords', []):
-                html += f'''
-                                    <span class="keyword">{keyword}</span>
-                '''
-                
-            html += '''
-                                </div>
-                            </div>
-            '''
-            
-        html += '''
                         </div>
                     </section>
-        '''
+            '''
+
+    # Skills
+    if resume_data.get('skills'):
+        if len(resume_data['skills']):
+            html += '''
+                <section class="section">
+                    <h2 class="section-title">Skills</h2>
+                    <div class="section-content">
+            '''
+            for skill in resume_data.get('skills', []):
+                html += f'''
+                    <div class="skill-group">
+                        <h3 class="skill-group-title">{skill.get('name')}</h3>
+                        <div class="skill-keywords">
+                '''
+                for keyword in skill.get('keywords', []):
+                    html += f'''
+                            <span class="keyword">{keyword}</span>
+                    '''
+                html += '''
+                        </div>
+                    </div>
+                '''
+            html += '''
+                    </div>
+                </section>
+            '''
 
     # Projects
     if resume_data.get('projects'):
@@ -247,48 +321,69 @@ def generate_resume_html(resume_data):
         '''
     
     # Languages
-    if resume_data.get('languages'):
-        html += '''
-                    <section class="section">
-                        <h2 class="section-title">Languages</h2>
-                        <div class="section-content">
-                            <div class="languages">
-        '''
-        
-        for language in resume_data.get('languages', []):
-            html += f'''
-                                <span class="language">{language}</span>
+    if len(resume_data['experience']) > 2:
+        if resume_data.get('languages'):
+            html += '''
+                        <section class="section">
+                            <h2 class="section-title">Languages</h2>
+                            <div class="section-content">
+                                <div class="languages">
             '''
             
-        html += '''
-                            </div>
-                        </div>
-                    </section>
-        '''
-    
-    # Certifications
-    if resume_data.get('certifications'):
-        html += '''
-                    <section class="section">
-                        <h2 class="section-title">Certifications</h2>
-                        <div class="section-content">
-        '''
-        
-        for cert in resume_data.get('certifications', []):
-            html += f'''
-                            <div class="item">
-                                <div class="item-header">
-                                    <h3 class="item-title">{cert.get('name', '')}</h3>
-                                    <p class="item-subtitle">{cert.get('issuingOrganization', '')}</p>
-                                    <div class="item-date">{format_date(cert.get('date', ''))}</div>
+            for language in resume_data.get('languages', []):
+                html += f'''
+                                    <span class="language">{language}</span>
+                '''
+                
+            html += '''
                                 </div>
                             </div>
+                        </section>
+            '''
+    
+        # Certifications
+        if resume_data.get('certifications'):
+            html += '''
+                        <section class="section">
+                            <h2 class="section-title">Certifications</h2>
+                            <div class="section-content">
             '''
             
-        html += '''
-                        </div>
-                    </section>
-        '''
+            for cert in resume_data.get('certifications', []):
+                html += f'''
+                                <div class="item">
+                                    <div class="item-header">
+                                        <h3 class="item-title">{cert.get('name', '')}</h3>
+                                        <p class="item-subtitle">{cert.get('issuingOrganization', '')}</p>
+                                        <div class="item-date">{format_date(cert.get('date', ''))}</div>
+                                    </div>
+                                </div>
+                '''
+                
+            html += '''
+                            </div>
+                        </section>
+            '''
+
+        # Interests
+        if resume_data.get('interests'):
+            html += '''
+                        <section class="section">
+                            <h2 class="section-title">Interests</h2>
+                            <div class="section-content">
+                                <div class="interests">
+            '''
+            
+            for interest in resume_data.get('interests', []):
+                html += f'''
+                                    <span class="interest">{interest}</span>
+                '''
+                
+            html += '''
+                                </div>
+                            </div>
+                        </section>
+            '''
     
     # Awards
     if resume_data.get('awards'):
@@ -303,33 +398,13 @@ def generate_resume_html(resume_data):
                             <div class="item">
                                 <div class="item-header">
                                     <h3 class="item-title">{award.get('title', '')}</h3>
-                                    <div class="item-date">{award.get('date', '')}</div>
+                                    <div class="item-date" style="margin-top:-0.85rem;">{format_date(award.get('date', ''))}</div>
                                 </div>
                                 {f'<div class="item-description"><p>{award.get("description", "")}</p></div>' if award.get('description') else ''}
                             </div>
             '''
             
         html += '''
-                        </div>
-                    </section>
-        '''
-    
-    # Interests
-    if resume_data.get('interests'):
-        html += '''
-                    <section class="section">
-                        <h2 class="section-title">Interests</h2>
-                        <div class="section-content">
-                            <div class="interests">
-        '''
-        
-        for interest in resume_data.get('interests', []):
-            html += f'''
-                                <span class="interest">{interest}</span>
-            '''
-            
-        html += '''
-                            </div>
                         </div>
                     </section>
         '''
@@ -348,8 +423,8 @@ def generate_resume_html(resume_data):
                                 <h3 class="item-title">{ref.get('name', '')}</h3>
                                 <p class="item-subtitle">{ref.get('title', '')} at {ref.get('company', '')}</p>
                                 <div class="reference-contact">
-                                    <p>Email: {ref.get('email', '')}</p>
-                                    <p>Phone: {ref.get('phone', '')}</p>
+                                    {f'<p>Email: {ref.get('email')}</p>' if ref.get('email') else ''}
+                                    {f'<p>Phone: {ref.get('phone')}</p>' if ref.get('phone') else ''}
                                 </div>
                             </div>
             '''
@@ -371,15 +446,13 @@ def generate_resume_html(resume_data):
     return html
 
 
-def get_default_css(dynamic_height):
+def get_default_css(dynamic_height=None):
+    height = f"{dynamic_height}pt" if dynamic_height else "1009pt"
     """Return default CSS for the resume based on Modern template"""
-    dynamic_height -= 50 # remove some of the height
     css = f"""
-    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@300;400;500;600;700&display=swap');
-
     @page {{
         margin: 0;
-        size: 612pt {dynamic_height}pt;
+        size: 612pt {height};
     }}
     """
 
@@ -389,6 +462,8 @@ def get_default_css(dynamic_height):
     }
 
     body {
+        margin: 0;
+        padding: 0;
         font-family: 'IBM Plex Serif', serif;
         color: #333;
         background-color: #fff;
@@ -447,15 +522,15 @@ def get_default_css(dynamic_height):
         display: flex;
         gap: 1rem;
         margin-bottom: 0.35rem;
+        margin-left: 2px
     }
 
     .social-links a {
         color: white;
         text-decoration: none;
-        background-color: rgba(255, 255, 255, 0.2);
-        padding: 0.5rem;
         border-radius: 4px;
         font-size: 0.9rem;
+        margin-right: 3px;
         transition: background-color 0.2s;
     }
 
@@ -463,24 +538,32 @@ def get_default_css(dynamic_height):
         background-color: rgba(255, 255, 255, 0.3);
     }
 
+    .social-links a img.link-img {
+        width: 20px;
+        height: 20px;
+    }
+
     /* Main Content Layout */
     .main-content {
         display: flex;
-        padding: 0.5rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+        padding-top: 0;
     }
 
     .left-column {
         flex: 2;
-        padding-right: 2rem;
+        padding-right: 1.5rem;
     }
 
     .right-column {
         flex: 1.5;
-        padding-left: 1rem;
+        padding-left: 0.5rem;
     }
 
     /* Summary Styles */
     .summary {
+        margin-top: -0.5rem;
         line-height: 1.5;
         font-size: 1.05rem;
         color: #4b5563;
@@ -509,13 +592,13 @@ def get_default_css(dynamic_height):
     }
 
     .item-header {
-        margin-bottom: 0.75rem;
+        margin-bottom: 0.70rem;
     }
 
     .item-title {
+        margin-top: -0.70rem;
         font-size: 1.15rem;
         font-weight: 600;
-        margin-bottom: 0.5rem;
         color: #1f2937;
     }
 
@@ -523,6 +606,7 @@ def get_default_css(dynamic_height):
         font-size: 1rem;
         color: #4b5563;
         margin-bottom: 0.25rem;
+        margin-top: -1rem;
         font-weight: 500;
     }
 
@@ -535,7 +619,30 @@ def get_default_css(dynamic_height):
     .item-description {
         font-size: 0.95rem;
         color: #4b5563;
-        line-height: 1.6;
+        line-height: 1.5;
+        margin-top: -0.5rem;
+    }
+
+    ul.list-disc.ml-3,
+    ul.ml-3 {
+        margin-left: 0 !important;
+        padding-left: 1.2em; /* keep bullet indent, but not excessive */
+    }
+    ul.list-disc {
+        list-style-type: disc;
+    }
+
+    ul.list-disc li {
+        margin-top: 0;           /* No extra space before the first bullet */
+        margin-bottom: 0.5em;    /* Small space after each bullet */
+    }
+
+    ul.list-disc li:not(:first-child) {
+        margin-top: -6px;        /* Reduce space between bullets after the first */
+    }
+    ul.list-disc li p {
+        margin: 0;
+        padding: 0;
     }
 
     /* Skills Styles */
