@@ -123,8 +123,8 @@ def data_caching(data, template_name="andromeda"):
     cached_hash = redis_client.get(cache_key_hash)
     cached_pdf_path = redis_client.get(cache_key_pdf)
 
-    if cached_hash and cached_pdf_path and cached_hash.decode() == data_hash:
-        return cached_pdf_path.decode()  # You can call `send_file` in your main route
+    if cached_hash and cached_pdf_path and cached_hash == data_hash:
+        return cached_pdf_path  # You can call `send_file` in your main route
     else:
         return None  # Indicates data changed or no cache
 
