@@ -129,5 +129,8 @@ def data_caching(data, template_name="andromeda"):
         return None  # Indicates data changed or no cache
 
 def get_output_path(name, template_name):
+    base_dir = os.path.join(tempfile.gettempdir(), 'resumeforge')
+    os.makedirs(base_dir, exist_ok=True)
+
     filename = f"{filename_generator(name)}_{template_name}"
-    return os.path.join(tempfile.gettempdir(), f"{filename}.pdf")
+    return os.path.join(base_dir, f"{filename}.pdf")

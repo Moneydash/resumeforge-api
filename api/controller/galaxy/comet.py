@@ -17,8 +17,11 @@ def generate_pdf():
         if not data:
             return jsonify({'error': 'No resume data provided'}), 400
         temp_dir = tempfile.gettempdir()
+        base_dir = os.path.join(temp_dir, 'resumeforge')
+        os.makedirs(base_dir, exist_ok=True)
+
         filename = f"resume_{uuid.uuid4().hex}.pdf"
-        output_path = os.path.join(temp_dir, filename)
+        output_path = os.path.join(base_dir, filename)
         html_content = generate_resume_html(data)
         HTML(string=html_content).write_pdf(
             output_path,
