@@ -14,14 +14,14 @@ A Flask-based backend API for generating beautiful, professional PDF resumes fro
 
 | Endpoint                        | Method | Description                                      |
 |---------------------------------|--------|--------------------------------------------------|
-| `/v1/api/pdf/andromeda/generate`| POST   | Generate PDF (Modern template)                   |
-| `/v1/api/pdf/cigar/generate`    | POST   | Generate PDF (Classic-Modern template)           |
-| `/v1/api/pdf/comet/generate`    | POST   | Generate PDF (Minimal template)                  |
-| `/v1/api/pdf/milky_way/generate`| POST   | Generate PDF (Creative template)                 |
-| `/v1/api/pdf/andromeda/export`  | POST   | Export PDF (Modern template, download)           |
-| `/v1/api/pdf/cigar/export`      | POST   | Export PDF (Classic-Modern template, download)   |
-| `/v1/api/pdf/comet/export`      | POST   | Export PDF (Minimal template, download)          |
-| `/v1/api/pdf/miky_way/export`   | POST   | Export PDF (Creative template, download)         |
+| `/api/pdf/andromeda/generate`   | POST   | Generate PDF (Modern template)                   |
+| `/api/pdf/cigar/generate`       | POST   | Generate PDF (Classic-Modern template)           |
+| `/api/pdf/comet/generate`       | POST   | Generate PDF (Minimal template)                  |
+| `/api/pdf/milky_way/generate`   | POST   | Generate PDF (Creative template)                 |
+| `/api/pdf/zeus/generate`        | POST   | Generate PDF (Zeus template)                     |
+| `/api/pdf/athena/generate`      | POST   | Generate PDF (Athena template)                   |
+| `/api/pdf/apollo/generate`      | POST   | Generate PDF (Apollo template)                   |
+| `/api/pdf/artemis/generate`     | POST   | Generate PDF (Artemis template)                  |
 
 ## Usage
 

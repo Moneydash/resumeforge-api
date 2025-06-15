@@ -32,7 +32,7 @@ def generate_pdf():
 
         html_content = generate_resume_html(data)
         buffer = 0.2
-        increment = (len(data.get('experience', [])) // 2) * 50
+        increment = (len(data.get('experience', [])) / 2) * 50
         final_css = css_height_calc(html_content, get_creative_css, data.get('personal', {}).get('email'), 'milky_way', buffer, max_attempts, increment)
         pdf_path = upload_pdf_to_supabase(name, "milky_way", html_content, final_css)
 

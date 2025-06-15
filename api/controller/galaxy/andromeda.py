@@ -31,7 +31,7 @@ def generate_pdf():
                 return redirect(url_res)
 
         html_content = generate_resume_html(data)
-        increment = (len(data.get('experience', [])) // 5) * 50
+        increment = (len(data.get('experience', [])) / 5) * 50
         final_css = css_height_calc(
             html_content,
             get_default_css,

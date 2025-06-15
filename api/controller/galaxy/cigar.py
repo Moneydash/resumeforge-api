@@ -1,8 +1,8 @@
 import os
 from flask import redirect, request, jsonify, current_app
 import logging
-from utils.cigar_helper import buff_calc, increment_calc
-from utils.helper import css_height_calc, data_caching, format_date, format_description, upload_pdf_to_supabase
+from utils.cigar_helper import buff_calc
+from utils.helper import css_height_calc, data_caching, format_date, format_description, upload_pdf_to_supabase, increment_calc
 import json
 import hashlib
 
@@ -34,7 +34,7 @@ def generate_pdf():
 
         html_content = generate_resume_html(data)
         buffer = buff_calc(data)
-        increment = increment_calc(data)
+        increment = increment_calc(data, 40)
         final_css = css_height_calc(html_content, get_classic_css, data.get('personal', {}).get('email'), 'cigar', buffer, max_attempts, increment)
         pdf_path = upload_pdf_to_supabase(name, "cigar", html_content, final_css)
 

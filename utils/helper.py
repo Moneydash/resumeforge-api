@@ -48,7 +48,7 @@ def css_height_calc(html_content, css_content, email, template, buffer, max_atte
     # Always get current content height from a no-height CSS
     html = HTML(string=html_content)
     initial_render = html.render(stylesheets=[CSS(string=css_content(1009))])
-    content_height = round(initial_render.pages[0].height, 2)
+    content_height = 1009
     buff_height = content_height * buffer
     content_height = max(content_height + buff_height, 100)
 
@@ -162,5 +162,19 @@ def upload_pdf_to_supabase(name, template_name, html_content, css_str):
     if isinstance(res, dict) and "error" in res:
         raise Exception(f"Upload failed: {res['error']['message']}")
 
-    # 4. Return public URL (optional)
+    # Return public URL
     return storage_path
+
+def increment_calc(data, percent):
+    exp = data.get('experience', [])
+    # increment periodically every 2 jobs
+    increment = (len(exp) / 2) * percent
+
+    # sample computation - (5 / 2) = (2.5 * 20) = 50 --> increment by 50pt
+    
+    # just for python notes in for loop...
+    # increment = 0
+    # for i in range(0, len(exp), 3):
+    #     increment += 50
+
+    return increment

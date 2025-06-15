@@ -5,7 +5,7 @@ from upstash_redis import Redis
 from dotenv import load_dotenv
 from supabase import Client, create_client
 
-from api.routes.galaxy.pdf import generate_bp
+from api.routes.pdf import generate_bp
 
 load_dotenv()
 
@@ -41,7 +41,7 @@ def create_app():
         return jsonify({'status': 'okay'}), 200
         
     # Register blueprints
-    app.register_blueprint(generate_bp, url_prefix='/galaxy/api/pdf')
+    app.register_blueprint(generate_bp, url_prefix='/api/pdf')
 
     return app
 
